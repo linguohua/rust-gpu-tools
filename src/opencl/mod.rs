@@ -350,6 +350,12 @@ impl<'a, T> KernelArgument<'a> for &'a Buffer<T> {
     }
 }
 
+impl KernelArgument<'_> for i32 {
+    fn push(&self, kernel: &mut Kernel) {
+        kernel.builder.set_arg(self);
+    }
+}
+
 impl KernelArgument<'_> for u32 {
     fn push(&self, kernel: &mut Kernel) {
         kernel.builder.set_arg(self);
