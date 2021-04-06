@@ -57,64 +57,6 @@ impl<T> Buffer<T> {
     pub fn length(&self) -> usize {
         self.length
     }
-
-    pub fn write_from(
-        &mut self,
-        queue: &opencl3::command_queue::CommandQueue,
-        offset: usize,
-        data: &[T],
-    ) -> GPUResult<()> {
-        assert!(offset + data.len() <= self.length());
-
-        let buffer_create_info = cl_buffer_region {
-            origin: (offset * std::mem::size_of::<T>()) as size_t,
-            size: (data.len() * std::mem::size_of::<T>()) as size_t,
-        };
-        let buff = self.buffer.create_sub_buffer(
-            CL_MEM_READ_WRITE,
-            CL_BUFFER_CREATE_TYPE_REGION,
-            &buffer_create_info as *const _ as *const c_void,
-        )?;
-
-        let data = unsafe {
-            std::slice::from_raw_parts(
-                data.as_ptr() as *const T as *const u8,
-                data.len() * std::mem::size_of::<T>(),
-            )
-        };
-
-        queue.enqueue_write_buffer(&buff, opencl3::types::CL_BLOCKING, 0, &data, &[])?;
-
-        Ok(())
-    }
-
-    pub fn read_into(
-        &self,
-        queue: &opencl3::command_queue::CommandQueue,
-        offset: usize,
-        data: &mut [T],
-    ) -> GPUResult<()> {
-        assert!(offset + data.len() <= self.length());
-        let buffer_create_info = cl_buffer_region {
-            origin: (offset * std::mem::size_of::<T>()) as size_t,
-            size: (data.len() * std::mem::size_of::<T>()) as size_t,
-        };
-        let buff = self.buffer.create_sub_buffer(
-            CL_MEM_READ_WRITE,
-            CL_BUFFER_CREATE_TYPE_REGION,
-            &buffer_create_info as *const _ as *const c_void,
-        )?;
-
-        let mut data = unsafe {
-            std::slice::from_raw_parts_mut(
-                data.as_mut_ptr() as *mut T as *mut u8,
-                data.len() * std::mem::size_of::<T>(),
-            )
-        };
-        queue.enqueue_read_buffer(&buff, opencl3::types::CL_BLOCKING, 0, &mut data, &[])?;
-
-        Ok(())
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -338,8 +280,74 @@ impl Program {
         }
     }
 
-    pub fn queue(&self) -> &opencl3::command_queue::CommandQueue {
-        self.context.default_queue()
+    pub fn write_from_buffer<T>(
+        &mut self,
+        buffer: &Buffer<T>,
+        offset: usize,
+        data: &[T],
+    ) -> GPUResult<()> {
+        assert!(offset + data.len() <= buffer.length());
+
+        let buffer_create_info = cl_buffer_region {
+            origin: (offset * std::mem::size_of::<T>()) as size_t,
+            size: (data.len() * std::mem::size_of::<T>()) as size_t,
+        };
+        let buff = buffer.buffer.create_sub_buffer(
+            CL_MEM_READ_WRITE,
+            CL_BUFFER_CREATE_TYPE_REGION,
+            &buffer_create_info as *const _ as *const c_void,
+        )?;
+
+        let data = unsafe {
+            std::slice::from_raw_parts(
+                data.as_ptr() as *const T as *const u8,
+                data.len() * std::mem::size_of::<T>(),
+            )
+        };
+
+        self.context.default_queue().enqueue_write_buffer(
+            &buff,
+            opencl3::types::CL_BLOCKING,
+            0,
+            &data,
+            &[],
+        )?;
+
+        Ok(())
+    }
+
+    pub fn read_into_buffer<T>(
+        &self,
+        buffer: &Buffer<T>,
+        offset: usize,
+        data: &mut [T],
+    ) -> GPUResult<()> {
+        assert!(offset + data.len() <= buffer.length());
+        let buffer_create_info = cl_buffer_region {
+            origin: (offset * std::mem::size_of::<T>()) as size_t,
+            size: (data.len() * std::mem::size_of::<T>()) as size_t,
+        };
+        let buff = buffer.buffer.create_sub_buffer(
+            CL_MEM_READ_WRITE,
+            CL_BUFFER_CREATE_TYPE_REGION,
+            &buffer_create_info as *const _ as *const c_void,
+        )?;
+
+        let mut data = unsafe {
+            std::slice::from_raw_parts_mut(
+                data.as_mut_ptr() as *mut T as *mut u8,
+                data.len() * std::mem::size_of::<T>(),
+            )
+        };
+        self.context.default_queue().enqueue_read_buffer(
+            &buff,
+            opencl3::types::CL_BLOCKING,
+            0,
+            &mut data,
+            &[],
+        )?;
+
+        Ok(())
     }
 }
 
