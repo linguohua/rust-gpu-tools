@@ -1,10 +1,10 @@
-use opencl3::{device::DeviceInfo, program::ProgramInfo, types::cl_int};
+use opencl3::{device::DeviceInfo, error_codes::ClError, program::ProgramInfo};
 
 #[derive(thiserror::Error, Debug)]
 #[allow(clippy::upper_case_acronyms)]
 pub enum GPUError {
     #[error("Opencl3 Error: {0}")]
-    Opencl3(cl_int),
+    Opencl3(ClError),
     #[error("Device not found!")]
     DeviceNotFound,
     #[error("Device info not available!")]
@@ -21,8 +21,8 @@ pub enum GPUError {
 #[allow(dead_code)]
 pub type GPUResult<T> = std::result::Result<T, GPUError>;
 
-impl From<cl_int> for GPUError {
-    fn from(error: cl_int) -> Self {
+impl From<ClError> for GPUError {
+    fn from(error: ClError) -> Self {
         GPUError::Opencl3(error)
     }
 }

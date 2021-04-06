@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use cl3::{api_info_value, api_info_vector};
 use lazy_static::lazy_static;
 use log::{debug, warn};
-use opencl3::error_codes::CL_SUCCESS;
+use opencl3::error_codes::{ClError, CL_SUCCESS};
 use opencl3::types::{cl_int, cl_uint};
 // TODO vmx 2021-02-26: Don't use cl_sys directly, but implement it in opecl3/cl3
 use cl_sys::clGetDeviceInfo;
@@ -36,25 +36,20 @@ api_info_vector!(get_device_info_bytes, u8, clGetDeviceInfo);
 
 pub fn get_bus_id(d: &opencl3::device::Device) -> Result<u32, GPUError> {
     let vendor = d.vendor()?;
-    match vendor.to_str() {
-        Ok(AMD_DEVICE_VENDOR_STRING) => get_amd_bus_id(d).map_err(Into::into),
-        Ok(NVIDIA_DEVICE_VENDOR_STRING) => get_nvidia_bus_id(d).map_err(Into::into),
-        _ => Err(GPUError::DeviceBusId(
-            vendor
-                .to_str()
-                .expect("Vendor is a valid UTF-8")
-                .to_string(),
-        )),
+    match vendor.as_str() {
+        AMD_DEVICE_VENDOR_STRING => get_amd_bus_id(d).map_err(Into::into),
+        NVIDIA_DEVICE_VENDOR_STRING => get_nvidia_bus_id(d).map_err(Into::into),
+        _ => Err(GPUError::DeviceBusId(vendor)),
     }
 }
 
-pub fn get_nvidia_bus_id(d: &opencl3::device::Device) -> Result<u32, cl_int> {
+pub fn get_nvidia_bus_id(d: &opencl3::device::Device) -> Result<u32, ClError> {
     const CL_DEVICE_PCI_BUS_ID_NV: u32 = 0x4008;
     let result = get_device_info_uint(d.id(), CL_DEVICE_PCI_BUS_ID_NV.into())?;
     Ok(result)
 }
 
-pub fn get_amd_bus_id(d: &opencl3::device::Device) -> Result<u32, cl_int> {
+pub fn get_amd_bus_id(d: &opencl3::device::Device) -> Result<u32, ClError> {
     const CL_DEVICE_TOPOLOGY_AMD: u32 = 0x4037;
     let size = std::mem::size_of::<cl_amd_device_topology>();
     let result = get_device_info_bytes(d.id(), CL_DEVICE_TOPOLOGY_AMD, size)?;
@@ -100,10 +95,7 @@ lazy_static! {
 
 pub fn find_platform(platform_name: &str) -> Result<Option<&opencl3::platform::Platform>, cl_int> {
     let platform = PLATFORMS.iter().find(|&p| match p.clone().name() {
-        Ok(p) => {
-            p == CString::new(platform_name.to_string())
-                .expect("Platform string contains null byte")
-        }
+        Ok(p) => p == platform_name,
         Err(_) => false,
     });
     Ok(platform)
@@ -125,10 +117,7 @@ fn build_device_list() -> HashMap<Brand, Vec<Device>> {
                             .map(opencl3::device::Device::new)
                             .filter(|d| {
                                 if let Ok(vendor) = d.vendor() {
-                                    match vendor
-                                        .to_str()
-                                        .expect("Vendor string contains invalid UTF-8")
-                                    {
+                                    match vendor.as_str() {
                                         // Only use devices from the accepted vendors ...
                                         AMD_DEVICE_VENDOR_STRING | NVIDIA_DEVICE_VENDOR_STRING => {
                                             // ... which are available.
@@ -142,10 +131,7 @@ fn build_device_list() -> HashMap<Brand, Vec<Device>> {
                             .map(|d| -> GPUResult<_> {
                                 Ok(Device {
                                     brand,
-                                    name: d
-                                        .name()?
-                                        .into_string()
-                                        .expect("Device name contains invalud UTF-8"),
+                                    name: d.name()?,
                                     memory: get_memory(&d)?,
                                     bus_id: utils::get_bus_id(&d).ok(),
                                     device: d,

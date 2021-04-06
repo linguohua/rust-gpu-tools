@@ -3,7 +3,6 @@ mod utils;
 
 pub use error::*;
 use sha2::{Digest, Sha256};
-use std::ffi::CString;
 use std::fmt::Write;
 use std::hash::{Hash, Hasher};
 use std::ptr;
@@ -50,7 +49,6 @@ impl Brand {
 pub struct Buffer<T> {
     buffer: opencl3::memory::Buffer<u8>,
     length: usize,
-    queue: opencl3::command_queue::CommandQueue,
     _phantom: std::marker::PhantomData<T>,
 }
 
@@ -60,7 +58,12 @@ impl<T> Buffer<T> {
         self.length
     }
 
-    pub fn write_from(&mut self, offset: usize, data: &[T]) -> GPUResult<()> {
+    pub fn write_from(
+        &mut self,
+        queue: &opencl3::command_queue::CommandQueue,
+        offset: usize,
+        data: &[T],
+    ) -> GPUResult<()> {
         assert!(offset + data.len() <= self.length());
 
         let buffer_create_info = cl_buffer_region {
@@ -80,13 +83,17 @@ impl<T> Buffer<T> {
             )
         };
 
-        self.queue
-            .enqueue_write_buffer(&buff, opencl3::types::CL_BLOCKING, 0, &data, &[])?;
+        queue.enqueue_write_buffer(&buff, opencl3::types::CL_BLOCKING, 0, &data, &[])?;
 
         Ok(())
     }
 
-    pub fn read_into(&self, offset: usize, data: &mut [T]) -> GPUResult<()> {
+    pub fn read_into(
+        &self,
+        queue: &opencl3::command_queue::CommandQueue,
+        offset: usize,
+        data: &mut [T],
+    ) -> GPUResult<()> {
         assert!(offset + data.len() <= self.length());
         let buffer_create_info = cl_buffer_region {
             origin: (offset * std::mem::size_of::<T>()) as size_t,
@@ -104,8 +111,7 @@ impl<T> Buffer<T> {
                 data.len() * std::mem::size_of::<T>(),
             )
         };
-        self.queue
-            .enqueue_read_buffer(&buff, opencl3::types::CL_BLOCKING, 0, &mut data, &[])?;
+        queue.enqueue_read_buffer(&buff, opencl3::types::CL_BLOCKING, 0, &mut data, &[])?;
 
         Ok(())
     }
@@ -259,9 +265,7 @@ impl Program {
             Program::from_binary(device, bin)
         } else {
             let mut context = opencl3::context::Context::from_device(device.device)?;
-            let options = CString::default();
-            let src_cstring = CString::new(src).expect("Program source contains a null byte");
-            context.build_program_from_source(&src_cstring, &options)?;
+            context.build_program_from_source(src, "")?;
             context.create_command_queues(0)?;
             let prog = Program { device, context };
             std::fs::write(cached, prog.to_binary()?)?;
@@ -271,8 +275,7 @@ impl Program {
     pub fn from_binary(device: Device, bin: Vec<u8>) -> GPUResult<Program> {
         let mut context = opencl3::context::Context::from_device(device.device)?;
         let bins = vec![&bin[..]];
-        let options = CString::default();
-        context.build_program_from_binary(&bins, &options)?;
+        context.build_program_from_binary(&bins, "")?;
         context.create_command_queues(0)?;
         Ok(Program { device, context })
     }
@@ -302,7 +305,6 @@ impl Program {
         Ok(Buffer::<T> {
             buffer: buff,
             length,
-            queue: queue.clone(),
             _phantom: std::marker::PhantomData,
         })
     }
@@ -324,10 +326,7 @@ impl Program {
     }
     pub fn create_kernel(&self, name: &str, gws: usize, lws: Option<usize>) -> Kernel {
         // TODO vmx 2021-03-01: Replace `unwrap()` with proper error handling
-        let kernel = self
-            .context
-            .get_kernel(&CString::new(name).expect("Kernel name contains a null byte"))
-            .unwrap();
+        let kernel = self.context.get_kernel(name).unwrap();
         let mut builder = opencl3::kernel::ExecuteKernel::new(kernel);
         builder.set_global_work_size(gws);
         if let Some(lws) = lws {
@@ -337,6 +336,10 @@ impl Program {
             builder,
             queue: self.context.default_queue(),
         }
+    }
+
+    pub fn queue(&self) -> &opencl3::command_queue::CommandQueue {
+        self.context.default_queue()
     }
 }
 
@@ -383,7 +386,7 @@ impl<T> KernelArgument<'_> for LocalBuffer<T> {
     }
 }
 
-#[derive(Debug)]
+//#[derive(Debug)]
 pub struct Kernel<'a> {
     builder: opencl3::kernel::ExecuteKernel<'a>,
     queue: &'a opencl3::command_queue::CommandQueue,
