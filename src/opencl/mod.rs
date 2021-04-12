@@ -3,6 +3,7 @@ mod utils;
 
 pub use error::*;
 use sha2::{Digest, Sha256};
+use std::collections::HashMap;
 use std::fmt::Write;
 use std::hash::{Hash, Hasher};
 use std::ptr;
@@ -192,8 +193,12 @@ pub fn get_memory(d: &opencl3::device::Device) -> GPUResult<u64> {
 }
 
 pub struct Program {
+    // TODO vmx 2021-04-11: The `Context` contains the devices, use those instead of storing them again
     device: Device,
+    program: opencl3::program::Program,
+    queue: opencl3::command_queue::CommandQueue,
     context: opencl3::context::Context,
+    kernels: HashMap<String, opencl3::kernel::Kernel>,
 }
 
 impl Program {
@@ -206,23 +211,54 @@ impl Program {
             let bin = std::fs::read(cached)?;
             Program::from_binary(device, bin)
         } else {
-            let mut context = opencl3::context::Context::from_device(device.device)?;
-            context.build_program_from_source(src, "")?;
-            context.create_command_queues(0)?;
-            let prog = Program { device, context };
+            let context = opencl3::context::Context::from_device(&device.device)?;
+            let program = opencl3::program::Program::create_from_source(&context, src)?;
+            // TODO vmx 2021-04-11 Attach build log (get it via program.get_build_log()) to the rror in case the creation fails
+            program.build(context.devices(), "")?;
+            let queue = opencl3::command_queue::CommandQueue::create(
+                &context,
+                context.default_device(),
+                0,
+            )?;
+            let kernels = opencl3::kernel::create_program_kernels(&program)?;
+            let kernels_by_name = kernels
+                .into_iter()
+                .map(|kernel| (kernel.function_name().unwrap(), kernel))
+                .collect();
+            let prog = Program {
+                program,
+                queue,
+                device,
+                context,
+                kernels: kernels_by_name,
+            };
             std::fs::write(cached, prog.to_binary()?)?;
             Ok(prog)
         }
     }
     pub fn from_binary(device: Device, bin: Vec<u8>) -> GPUResult<Program> {
-        let mut context = opencl3::context::Context::from_device(device.device)?;
+        let context = opencl3::context::Context::from_device(&device.device)?;
         let bins = vec![&bin[..]];
-        context.build_program_from_binary(&bins, "")?;
-        context.create_command_queues(0)?;
-        Ok(Program { device, context })
+        let program =
+            opencl3::program::Program::create_from_binary(&context, context.devices(), &bins)?;
+        program.build(context.devices(), "")?;
+        let queue =
+            opencl3::command_queue::CommandQueue::create(&context, context.default_device(), 0)?;
+        let kernels = opencl3::kernel::create_program_kernels(&program)?;
+        let kernels_by_name = kernels
+            .into_iter()
+            .map(|kernel| (kernel.function_name().unwrap(), kernel))
+            .collect();
+        Ok(Program {
+            device,
+            program,
+            queue,
+            context,
+            kernels: kernels_by_name,
+        })
     }
     pub fn to_binary(&self) -> GPUResult<Vec<u8>> {
-        match self.context.programs()[0].get_binaries() {
+        match self.program.get_binaries() {
             Ok(bins) => Ok(bins[0].clone()),
             Err(_) => Err(GPUError::ProgramInfoNotAvailable(
                 opencl3::program::ProgramInfo::CL_PROGRAM_BINARIES,
@@ -241,8 +277,8 @@ impl Program {
             length * std::mem::size_of::<T>(),
             ptr::null_mut(),
         )?;
-        let queue = self.context.default_queue();
-        queue.enqueue_write_buffer(&buff, opencl3::types::CL_BLOCKING, 0, &vec![0u8], &[])?;
+        self.queue
+            .enqueue_write_buffer(&buff, opencl3::types::CL_BLOCKING, 0, &vec![0u8], &[])?;
 
         Ok(Buffer::<T> {
             buffer: buff,
@@ -267,16 +303,15 @@ impl Program {
         self.create_buffer::<T>(n)
     }
     pub fn create_kernel(&self, name: &str, gws: usize, lws: Option<usize>) -> Kernel {
-        // TODO vmx 2021-03-01: Replace `unwrap()` with proper error handling
-        let kernel = self.context.get_kernel(name).unwrap();
-        let mut builder = opencl3::kernel::ExecuteKernel::new(kernel);
+        // TODO vmx 2021-04-11: Proper error handling instead of `unwrap()`
+        let mut builder = opencl3::kernel::ExecuteKernel::new(&self.kernels.get(name).unwrap());
         builder.set_global_work_size(gws);
         if let Some(lws) = lws {
             builder.set_local_work_size(lws);
         }
         Kernel {
             builder,
-            queue: self.context.default_queue(),
+            queue: &self.queue,
         }
     }
 
@@ -305,13 +340,8 @@ impl Program {
             )
         };
 
-        self.context.default_queue().enqueue_write_buffer(
-            &buff,
-            opencl3::types::CL_BLOCKING,
-            0,
-            &data,
-            &[],
-        )?;
+        self.queue
+            .enqueue_write_buffer(&buff, opencl3::types::CL_BLOCKING, 0, &data, &[])?;
 
         Ok(())
     }
@@ -339,13 +369,8 @@ impl Program {
                 data.len() * std::mem::size_of::<T>(),
             )
         };
-        self.context.default_queue().enqueue_read_buffer(
-            &buff,
-            opencl3::types::CL_BLOCKING,
-            0,
-            &mut data,
-            &[],
-        )?;
+        self.queue
+            .enqueue_read_buffer(&buff, opencl3::types::CL_BLOCKING, 0, &mut data, &[])?;
 
         Ok(())
     }
