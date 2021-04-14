@@ -21,3 +21,8 @@ opencl3 = "0.2"
 once_cell = "1.5.2"
 cl-sys = "0.4.2"
 libc = "0.2.86"
+
+# cuda deps
+rustacuda = { version = "0.1" }
+rustacuda_derive = { version = "0.1" }
+rustacuda_core = { version = "0.1" }
