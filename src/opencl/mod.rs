@@ -60,6 +60,9 @@ impl<T> Buffer<T> {
     }
 }
 
+// TODO vmx 2021-04-14: That's not ideal, opencl3 should really implement `Send`
+unsafe impl<T> Send for Buffer<T> {}
+
 #[derive(Debug, Clone)]
 pub struct Device {
     brand: Brand,
@@ -375,6 +378,9 @@ impl Program {
         Ok(())
     }
 }
+
+// TODO vmx 2021-04-14: That's not ideal, opencl3 should really implement `Send`
+unsafe impl Send for Program {}
 
 pub trait KernelArgument<'a> {
     fn push(&self, kernel: &mut Kernel<'a>);
