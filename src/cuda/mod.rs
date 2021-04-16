@@ -110,9 +110,11 @@ impl Device {
             .into_iter()
             .filter_map(|brand| utils::DEVICES.get(&brand).map(|(devices, _)| devices))
             .flatten();
-        println!("vmx: all devices: {:?}", all_devices.clone().collect::<Vec<&'static Device>>());
+        println!(
+            "vmx: all devices: {:?}",
+            all_devices.clone().collect::<Vec<&'static Device>>()
+        );
         all_devices
-
     }
 
     pub fn by_bus_id(bus_id: BusId) -> GPUResult<&'static Device> {
@@ -209,7 +211,7 @@ impl Program {
     //    self.device.clone()
     //}
     pub fn device_name(&self) -> &str {
-       &self.device_name
+        &self.device_name
     }
     // TODO vmx 2021-04-14: Think about if it makes it a nicer API if the filename won't be a CStr
     pub fn from_cuda(device: &Device, filename: &CStr) -> GPUResult<Program> {
