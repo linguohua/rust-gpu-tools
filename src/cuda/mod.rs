@@ -208,7 +208,7 @@ impl Program {
        &self.device_name
     }
     // TODO vmx 2021-04-14: Think about if it makes it a nicer API if the filename won't be a CStr
-    pub fn from_cuda(device: Device, filename: &CStr) -> GPUResult<Program> {
+    pub fn from_cuda(device: &Device, filename: &CStr) -> GPUResult<Program> {
         //let cached = utils::cache_path(&device, src)?;
         //if std::path::Path::exists(&cached) {
         //    let bin = std::fs::read(cached)?;
