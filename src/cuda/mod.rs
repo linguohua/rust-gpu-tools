@@ -193,7 +193,7 @@ pub fn get_memory(d: &rustacuda::device::Device) -> GPUResult<u64> {
 
 pub struct Program {
     //device: rustacuda::device::Device,
-    //context: rustacuda::context::UnownedContext,
+    context: rustacuda::context::UnownedContext,
     //device: Device,
     module: rustacuda::module::Module,
     stream: rustacuda::stream::Stream,
@@ -233,6 +233,7 @@ impl Program {
             module,
             stream,
             device_name: device.name(),
+            context: device.context.clone(),
         };
         Ok(prog)
         //}
@@ -350,6 +351,13 @@ impl Program {
     /// This is only needed for CUDA. Call this once you're done to synchronize the stream
     pub fn sync(&self) -> GPUResult<()> {
         self.stream.synchronize().map_err(Into::into)
+    }
+
+    /// This is only needed for CUDA. Call it whenever you need the context to be set correctly
+    // TODO vmx 2021-04-16: It would be great if this could be abstracted away, directly into
+    // rust-gpu-tools
+    pub fn set_context(&self) -> GPUResult<()> {
+        rustacuda::context::CurrentContext::set_current(&self.context).map_err(Into::into)
     }
 }
 
