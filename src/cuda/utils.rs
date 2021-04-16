@@ -67,19 +67,19 @@ pub struct CudaContexts(Vec<rustacuda::context::Context>);
 unsafe impl Sync for CudaContexts {}
 
 lazy_static! {
-    pub static ref PLATFORMS: Vec<opencl3::platform::Platform> =
-        opencl3::platform::get_platforms().unwrap_or_default();
+    //pub static ref PLATFORMS: Vec<opencl3::platform::Platform> =
+    //    opencl3::platform::get_platforms().unwrap_or_default();
     //pub static ref DEVICES: HashMap<Brand, Vec<(Device, rustacuda::context::Context)>> = build_device_list();
     pub static ref DEVICES: HashMap<Brand, (Vec<Device>, CudaContexts)> = build_device_list();
 }
 
-pub fn find_platform(platform_name: &str) -> Result<Option<&opencl3::platform::Platform>, cl_int> {
-    let platform = PLATFORMS.iter().find(|&p| match p.clone().name() {
-        Ok(p) => p == platform_name,
-        Err(_) => false,
-    });
-    Ok(platform)
-}
+//pub fn find_platform(platform_name: &str) -> Result<Option<&opencl3::platform::Platform>, cl_int> {
+//    let platform = PLATFORMS.iter().find(|&p| match p.clone().name() {
+//        Ok(p) => p == platform_name,
+//        Err(_) => false,
+//    });
+//    Ok(platform)
+//}
 
 //fn build_device_list() -> HashMap<Brand, Vec<(Device, rustacuda::context::Context)>> {
 fn build_device_list() -> HashMap<Brand, (Vec<Device>, CudaContexts)> {
