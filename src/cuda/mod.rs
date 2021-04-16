@@ -110,7 +110,7 @@ impl Device {
             .into_iter()
             .filter_map(|brand| utils::DEVICES.get(&brand).map(|(devices, _)| devices))
             .flatten();
-        println!("vmx: all devices: {:?}", all_devices);
+        println!("vmx: all devices: {:?}", all_devices.clone().collect::<Vec<&'static Device>>());
         all_devices
 
     }
