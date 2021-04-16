@@ -83,101 +83,53 @@ lazy_static! {
 
 //fn build_device_list() -> HashMap<Brand, Vec<(Device, rustacuda::context::Context)>> {
 fn build_device_list() -> HashMap<Brand, (Vec<Device>, CudaContexts)> {
-    let devices = rustacuda::device::Device::devices();
-    println!("vmx: rust gpu tools: utils: build_device_list: {:?}", devices);
-    // TODO vmx 20221-04-14: no `unwrpa()`, but proper error handling
-    let devices_and_contexts: Vec<(Device, rustacuda::context::Context)> =
-        rustacuda::device::Device::devices()
-            .unwrap()
-            .map(|device| {
-                match device {
-                    Ok(device) => {
-                        // TODO vmx 2021-04-14: proper error handling
-                        let context = rustacuda::context::Context::create_and_push(
-                            rustacuda::context::ContextFlags::MAP_HOST
-                                | rustacuda::context::ContextFlags::SCHED_AUTO,
-                            device,
-                        )
-                        .unwrap();
+    rustacuda::init(rustacuda::CudaFlags::empty())
+        .and_then(|_| {
+            // TODO vmx 20221-04-14: no `unwrpa()`, but proper error handling
+            let devices_and_contexts: Vec<(Device, rustacuda::context::Context)> =
+                rustacuda::device::Device::devices()
+                    .unwrap()
+                    .map(|device| {
+                        match device {
+                            Ok(device) => {
+                                // TODO vmx 2021-04-14: proper error handling
+                                let context = rustacuda::context::Context::create_and_push(
+                                    rustacuda::context::ContextFlags::MAP_HOST
+                                        | rustacuda::context::ContextFlags::SCHED_AUTO,
+                                    device,
+                                )
+                                .unwrap();
 
-                        (
-                            Device {
-                                brand: Brand::Nvidia,
-                                // TODO vmx 2021-04-14: Look why this could fail
-                                name: device.name().unwrap(),
-                                // TODO vmx 2021-04-14: Look why this could fail
-                                memory: get_memory(&device).unwrap(),
-                                bus_id: get_bus_id(&device).ok(),
-                                device,
-                                context: context.get_unowned(),
-                            },
-                            context,
-                        )
-                    }
-                    Err(_) => panic!("TODO some proper error"),
-                }
-            })
-            .collect();
+                                (
+                                    Device {
+                                        brand: Brand::Nvidia,
+                                        // TODO vmx 2021-04-14: Look why this could fail
+                                        name: device.name().unwrap(),
+                                        // TODO vmx 2021-04-14: Look why this could fail
+                                        memory: get_memory(&device).unwrap(),
+                                        bus_id: get_bus_id(&device).ok(),
+                                        device,
+                                        context: context.get_unowned(),
+                                    },
+                                    context,
+                                )
+                            }
+                            Err(_) => panic!("TODO some proper error"),
+                        }
+                    })
+                    .collect();
 
-    //let (devices, contexts): (Vec<Device>, Vec<rustacuda::context::Context>) = devicesAndContexts.into_iter().unzip();
-    let (devices, contexts) = devices_and_contexts.into_iter().unzip();
-    let wrapped_contexts = CudaContexts(contexts);
+            //let (devices, contexts): (Vec<Device>, Vec<rustacuda::context::Context>) = devicesAndContexts.into_iter().unzip();
+            let (devices, contexts) = devices_and_contexts.into_iter().unzip();
+            let wrapped_contexts = CudaContexts(contexts);
 
-    debug!("loaded devices: {:?}", devices);
-    let mut device_list = HashMap::with_capacity(1);
-    device_list.insert(Brand::Nvidia, (devices, wrapped_contexts));
-    device_list
-
-    //let brands = Brand::all();
-    //let mut map = HashMap::with_capacity(brands.len());
-    //
-    //for brand in brands.into_iter() {
-    //    match find_platform(brand.platform_name()) {
-    //        Ok(Some(platform)) => {
-    //            let devices = platform
-    //                .get_devices(opencl3::device::CL_DEVICE_TYPE_ALL)
-    //                .map_err(Into::into)
-    //                .and_then(|devices| {
-    //                    devices
-    //                        .into_iter()
-    //                        .map(opencl3::device::Device::new)
-    //                        //.filter(|d| {
-    //                        //    if let Ok(vendor) = d.vendor() {
-    //                        //        match vendor.as_str() {
-    //                        //            // Only use devices from the accepted vendors ...
-    //                        //            AMD_DEVICE_VENDOR_STRING | NVIDIA_DEVICE_VENDOR_STRING => {
-    //                        //                // ... which are available.
-    //                        //                return d.available().unwrap_or(0) != 0;
-    //                        //            }
-    //                        //            _ => (),
-    //                        //        }
-    //                        //    }
-    //                        //    false
-    //                        //})
-    //                        .map(|d| -> GPUResult<_> {
-    //                            Ok(Device {
-    //                                brand,
-    //                                name: d.name()?,
-    //                                memory: get_memory(&d)?,
-    //                                bus_id: utils::get_bus_id(&d).ok(),
-    //                                device: d,
-    //                            })
-    //                        })
-    //                        .collect::<GPUResult<Vec<_>>>()
-    //                });
-    //            match devices {
-    //                Ok(devices) => {
-    //                    map.insert(brand, devices);
-    //                }
-    //                Err(err) => {
-    //                    warn!("Unable to retrieve devices for {:?}: {:?}", brand, err);
-    //                }
-    //            }
-    //        }
-    //        Ok(None) => {}
-    //        Err(err) => {
-    //            warn!("Platform issue for brand {:?}: {:?}", brand, err);
-    //        }
-    //    }
-    //}
+            debug!("loaded devices: {:?}", devices);
+            let mut device_list = HashMap::with_capacity(1);
+            device_list.insert(Brand::Nvidia, (devices, wrapped_contexts));
+            Ok(device_list)
+        })
+        .unwrap_or_else(|err| {
+            warn!("failed to init cuda: {:?}", err);
+            HashMap::new()
+        })
 }
