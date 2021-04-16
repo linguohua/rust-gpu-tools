@@ -83,6 +83,8 @@ pub fn find_platform(platform_name: &str) -> Result<Option<&opencl3::platform::P
 
 //fn build_device_list() -> HashMap<Brand, Vec<(Device, rustacuda::context::Context)>> {
 fn build_device_list() -> HashMap<Brand, (Vec<Device>, CudaContexts)> {
+    let devices = rustacuda::device::Device::devices();
+    println!("vmx: rust gpu tools: utils: build_device_list: {:?}", devices);
     // TODO vmx 20221-04-14: no `unwrpa()`, but proper error handling
     let devices_and_contexts: Vec<(Device, rustacuda::context::Context)> =
         rustacuda::device::Device::devices()
