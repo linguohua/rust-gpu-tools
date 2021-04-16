@@ -33,6 +33,7 @@ impl Brand {
     }
 
     fn all() -> Vec<Brand> {
+        //vec![Brand::Nvidia, Brand::Amd, Brand::Apple]
         vec![Brand::Nvidia, Brand::Amd, Brand::Apple]
     }
 }
@@ -105,10 +106,13 @@ impl Device {
     }
 
     pub fn all_iter() -> impl Iterator<Item = &'static Device> {
-        Brand::all()
+        let all_devices = Brand::all()
             .into_iter()
             .filter_map(|brand| utils::DEVICES.get(&brand).map(|(devices, _)| devices))
-            .flatten()
+            .flatten();
+        println!("vmx: all devices: {:?}", all_devices);
+        all_devices
+
     }
 
     pub fn by_bus_id(bus_id: BusId) -> GPUResult<&'static Device> {
