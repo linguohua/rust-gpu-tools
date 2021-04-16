@@ -191,6 +191,7 @@ pub struct Program {
     //device: Device,
     module: rustacuda::module::Module,
     stream: rustacuda::stream::Stream,
+    device_name: String,
     //// TODO vmx 2021-04-11: The `Context` contains the devices, use those instead of storing them again
     //device: Device,
     //program: opencl3::program::Program,
@@ -203,6 +204,9 @@ impl Program {
     //pub fn device(&self) -> Device {
     //    self.device.clone()
     //}
+    pub fn device_name(&self) -> &str {
+       &self.device_name
+    }
     // TODO vmx 2021-04-14: Think about if it makes it a nicer API if the filename won't be a CStr
     pub fn from_cuda(device: Device, filename: &CStr) -> GPUResult<Program> {
         //let cached = utils::cache_path(&device, src)?;
@@ -222,6 +226,7 @@ impl Program {
             //device: device.device,
             module,
             stream,
+            device_name: device.name(),
         };
         Ok(prog)
         //}
