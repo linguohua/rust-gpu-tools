@@ -235,6 +235,7 @@ impl Program {
             device_name: device.name(),
             context: device.context.clone(),
         };
+        rustacuda::context::ContextStack::pop().unwrap();
         Ok(prog)
         //}
     }

@@ -99,6 +99,7 @@ fn build_device_list() -> HashMap<Brand, (Vec<Device>, CudaContexts)> {
                                     device,
                                 )
                                 .unwrap();
+                                rustacuda::context::ContextStack::pop().unwrap();
 
                                 (
                                     Device {
