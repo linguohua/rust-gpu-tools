@@ -349,16 +349,19 @@ impl Program {
         Ok(())
     }
 
-    /// This is only needed for CUDA. Call this once you're done to synchronize the stream
-    pub fn sync(&self) -> GPUResult<()> {
-        self.stream.synchronize().map_err(Into::into)
-    }
-
-    /// This is only needed for CUDA. Call it whenever you need the context to be set correctly
-    // TODO vmx 2021-04-16: It would be great if this could be abstracted away, directly into
-    // rust-gpu-tools
-    pub fn set_context(&self) -> GPUResult<()> {
-        rustacuda::context::CurrentContext::set_current(&self.context).map_err(Into::into)
+    /// Run some code in the context of the program
+    ///
+    /// On CUDA it sets the correct contexts and synchronizes the stream before returning.
+    pub fn run<F, R, E>(&self, fun: F) -> Result<R, E>
+    where
+        F: FnOnce() -> Result<R, E>,
+        E: From<GPUError>,
+    {
+        rustacuda::context::CurrentContext::set_current(&self.context).map_err(Into::into)?;
+        let result = fun();
+        self.stream.synchronize().map_err(Into::into)?;
+        rustacuda::context::ContextStack::pop().map_err(Into::into)?;
+        result
     }
 }
 
