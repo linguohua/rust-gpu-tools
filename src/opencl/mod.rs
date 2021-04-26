@@ -212,7 +212,7 @@ impl Program {
             Program::from_binary(device, bin)
         } else {
             let context = opencl3::context::Context::from_device(&device.device)?;
-            let program = opencl3::program::Program::create_from_source(&context, src)?;
+            let mut program = opencl3::program::Program::create_from_source(&context, src)?;
             // TODO vmx 2021-04-11 Attach build log (get it via program.get_build_log()) to the rror in case the creation fails
             program.build(context.devices(), "")?;
             let queue = opencl3::command_queue::CommandQueue::create(
@@ -239,7 +239,7 @@ impl Program {
     pub fn from_binary(device: Device, bin: Vec<u8>) -> GPUResult<Program> {
         let context = opencl3::context::Context::from_device(&device.device)?;
         let bins = vec![&bin[..]];
-        let program =
+        let mut program =
             opencl3::program::Program::create_from_binary(&context, context.devices(), &bins)?;
         program.build(context.devices(), "")?;
         let queue =
