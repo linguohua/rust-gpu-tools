@@ -213,8 +213,10 @@ impl Program {
         } else {
             let context = opencl3::context::Context::from_device(&device.device)?;
             let mut program = opencl3::program::Program::create_from_source(&context, src)?;
-            // TODO vmx 2021-04-11 Attach build log (get it via program.get_build_log()) to the rror in case the creation fails
-            program.build(context.devices(), "")?;
+            if let Err(build_error) = program.build(context.devices(), "") {
+                let log = program.get_build_log(context.devices()[0])?;
+                return Err(GPUError::Opencl3(build_error, Some(log)));
+            }
             let queue = opencl3::command_queue::CommandQueue::create(
                 &context,
                 context.default_device(),
@@ -241,7 +243,10 @@ impl Program {
         let bins = vec![&bin[..]];
         let mut program =
             opencl3::program::Program::create_from_binary(&context, context.devices(), &bins)?;
-        program.build(context.devices(), "")?;
+        if let Err(build_error) = program.build(context.devices(), "") {
+            let log = program.get_build_log(context.devices()[0])?;
+            return Err(GPUError::Opencl3(build_error, Some(log)));
+        }
         let queue =
             opencl3::command_queue::CommandQueue::create(&context, context.default_device(), 0)?;
         let kernels = opencl3::kernel::create_program_kernels(&program)?;
