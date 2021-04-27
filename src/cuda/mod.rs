@@ -365,8 +365,8 @@ impl Program {
     }
 }
 
-// TODO vmx 2021-04-14: Check if the kernel argument abstraction is still needed (it doesn't make
-// much sense in CUDA and perhaps it's also no longer needed for OpenCL
+/// Kernel arguments implement this trait, so that we can convert it into the correct pointers
+/// needed by the actual kernel call.
 pub trait KernelArgument<'a> {
     fn push(&self, kernel: &mut Kernel<'a>);
 }
@@ -375,7 +375,7 @@ impl<'a, T> KernelArgument<'a> for &'a Buffer<T> {
     fn push(&self, kernel: &mut Kernel<'a>) {
         kernel
             .args
-            .push(&self.buffer as *const _ as *mut ::std::ffi::c_void);
+            .push(&self.buffer.as_ptr() as *const _ as *mut ::std::ffi::c_void);
     }
 }
 
@@ -429,73 +429,25 @@ pub struct Kernel<'a> {
 }
 
 impl<'a> Kernel<'a> {
-    pub fn get_settings(
-        &self,
-    ) -> (
-        &rustacuda::function::Function<'a>,
-        usize,
-        usize,
-        &'a rustacuda::stream::Stream,
-    ) {
-        (
-            &self.function,
-            self.global_work_size,
-            // TODO vmx 2021-04-14: Don't unwrap()
-            self.local_work_size.unwrap(),
-            self.stream,
-        )
+    pub fn arg<T: KernelArgument<'a>>(mut self, t: T) -> Self {
+        t.push(&mut self);
+        self
     }
-    //pub fn arg<T: KernelArgument<'a>>(mut self, t: T) -> Self {
-    //    t.push(&mut self);
-    //    //self.args.push(t as *const _ as *mut ::std::ffi::c_void);
-    //    self
-    //}
-    //pub fn run(mut self) -> GPUResult<()> {
-    //            launch!(
-    //            module.G2_bellman_multiexp<<<global_work_size as u32,
-    //                                         LOCAL_WORK_SIZE as u32,
-    //                                         0, stream>>>
-    //                (base_buffer_g.as_device_ptr(),
-    //                 bucket_buffer_g.as_device_ptr(),
-    //                 result_buffer_g.as_device_ptr(),
-    //                 exp_buffer_g.as_device_ptr(),
-    //                 n as u32,
-    //                 num_groups as u32,
-    //                 num_windows as u32,
-    //                 window_size as u32
-    //                ))?;
-    //    //let function = self.function
-    //    launch!(
-    //        self.function<<<self.global_work_size as u32, self.local_work_size.unwrap() as u32, 0 self.stream>>>(
-    //
-    //        )
-    //    )?;
-    //    Ok(())
-    //}
-}
 
-#[macro_export]
-macro_rules! call_cuda_kernel {
-   ($kernel:expr, $( $arg:expr ),*) => {{
-       let (function, global_work_size, local_work_size, stream) = $kernel.get_settings();
-       unsafe {
-           launch!(
-               // TODO vmx 2021-04-14: Don't `unwrap()`, but make sure it's always set
-               function<<<global_work_size as u32, local_work_size as u32, 0, stream>>>(
-                   $($arg),*
-               )
-           )
-       }
-   }};
+    pub fn run(self) -> GPUResult<()> {
+        unsafe {
+            // TODO vmx 2021-04-14: Don't unwrap()
+            self.stream.launch(
+                &self.function,
+                self.global_work_size as u32,
+                self.local_work_size.unwrap() as u32,
+                0,
+                &self.args,
+            )?;
+        };
+        Ok(())
+    }
 }
-//#[macro_export]
-//macro_rules! call_cuda_kernel {
-//    ($kernel:expr, $($arg:expr),*) => {{
-//        $kernel
-//        $(.arg($arg))*
-//        .run()
-//    }};
-//}
 
 #[cfg(test)]
 mod test {
