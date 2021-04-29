@@ -368,30 +368,23 @@ impl Program {
 /// Kernel arguments implement this trait, so that we can convert it into the correct pointers
 /// needed by the actual kernel call.
 pub trait KernelArgument<'a> {
-    fn push(&self, kernel: &mut Kernel<'a>);
+    fn as_c_void(&self) -> *mut std::ffi::c_void;
 }
 
-impl<'a, T> KernelArgument<'a> for &'a Buffer<T> {
-    fn push(&self, kernel: &mut Kernel<'a>) {
-        kernel
-            .args
-            .push(&self.buffer.as_ptr() as *const _ as *mut ::std::ffi::c_void);
+impl<'a, T> KernelArgument<'a> for Buffer<T> {
+    fn as_c_void(&self) -> *mut std::ffi::c_void {
+        &self.buffer as *const _ as _
     }
 }
 
 impl KernelArgument<'_> for i32 {
-    fn push(&self, kernel: &mut Kernel) {
-        kernel
-            .args
-            .push(self as *const _ as *mut ::std::ffi::c_void);
+    fn as_c_void(&self) -> *mut std::ffi::c_void {
+        self as *const _ as _
     }
 }
-
 impl KernelArgument<'_> for u32 {
-    fn push(&self, kernel: &mut Kernel) {
-        kernel
-            .args
-            .push(self as *const _ as *mut ::std::ffi::c_void);
+    fn as_c_void(&self) -> *mut std::ffi::c_void {
+        self as *const _ as _
     }
 }
 
@@ -429,8 +422,8 @@ pub struct Kernel<'a> {
 }
 
 impl<'a> Kernel<'a> {
-    pub fn arg<T: KernelArgument<'a>>(mut self, t: T) -> Self {
-        t.push(&mut self);
+    pub fn arg<T: KernelArgument<'a>>(mut self, t: &T) -> Self {
+        self.args.push(t.as_c_void());
         self
     }
 
