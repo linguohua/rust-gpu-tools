@@ -206,8 +206,8 @@ impl Program {
     pub fn device_name(&self) -> &str {
         &self.device_name
     }
-    pub fn from_opencl(device: Device, src: &str) -> GPUResult<Program> {
-        let cached = utils::cache_path(&device, src)?;
+    pub fn from_opencl(device: &Device, src: &str) -> GPUResult<Program> {
+        let cached = utils::cache_path(device, src)?;
         if std::path::Path::exists(&cached) {
             let bin = std::fs::read(cached)?;
             Program::from_binary(device, bin)
@@ -239,7 +239,7 @@ impl Program {
             Ok(prog)
         }
     }
-    pub fn from_binary(device: Device, bin: Vec<u8>) -> GPUResult<Program> {
+    pub fn from_binary(device: &Device, bin: Vec<u8>) -> GPUResult<Program> {
         let context = opencl3::context::Context::from_device(&device.device)?;
         let bins = vec![&bin[..]];
         let mut program =
