@@ -308,13 +308,11 @@ impl Program {
         }
         self.create_buffer::<T>(n)
     }
-    pub fn create_kernel(&self, name: &str, gws: usize, lws: Option<usize>) -> Kernel {
+    pub fn create_kernel(&self, name: &str, gws: usize, lws: usize) -> Kernel {
         // TODO vmx 2021-04-11: Proper error handling instead of `unwrap()`
         let mut builder = opencl3::kernel::ExecuteKernel::new(&self.kernels.get(name).unwrap());
         builder.set_global_work_size(gws);
-        if let Some(lws) = lws {
-            builder.set_local_work_size(lws);
-        }
+        builder.set_local_work_size(gws * lws);
         Kernel {
             builder,
             queue: &self.queue,
