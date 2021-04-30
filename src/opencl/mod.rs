@@ -195,8 +195,7 @@ pub fn get_memory(d: &opencl3::device::Device) -> GPUResult<u64> {
 }
 
 pub struct Program {
-    // TODO vmx 2021-04-11: The `Context` contains the devices, use those instead of storing them again
-    device: Device,
+    device_name: String,
     program: opencl3::program::Program,
     queue: opencl3::command_queue::CommandQueue,
     context: opencl3::context::Context,
@@ -204,8 +203,8 @@ pub struct Program {
 }
 
 impl Program {
-    pub fn device(&self) -> Device {
-        self.device.clone()
+    pub fn device_name(&self) -> &str {
+        &self.device_name
     }
     pub fn from_opencl(device: Device, src: &str) -> GPUResult<Program> {
         let cached = utils::cache_path(&device, src)?;
@@ -230,9 +229,9 @@ impl Program {
                 .map(|kernel| (kernel.function_name().unwrap(), kernel))
                 .collect();
             let prog = Program {
+                device_name: device.name().clone(),
                 program,
                 queue,
-                device,
                 context,
                 kernels: kernels_by_name,
             };
@@ -257,7 +256,7 @@ impl Program {
             .map(|kernel| (kernel.function_name().unwrap(), kernel))
             .collect();
         Ok(Program {
-            device,
+            device_name: device.name().clone(),
             program,
             queue,
             context,
