@@ -300,7 +300,7 @@ impl Program {
 
     // TODO vmx 2021-04-14: perhaps rename to `prepare_kernel()` or `get_kernel()`, which seems
     // closer to what OpenCL and CUDA is doing.
-    pub fn create_kernel(&self, name: &str, gws: usize, lws: Option<usize>) -> Kernel {
+    pub fn create_kernel(&self, name: &str, gws: usize, lws: usize) -> Kernel {
         let function_name = CString::new(name).expect("Kernel name must not contain nul byts");
         // TODO vmx 2021-04-14: That should be a proper error and not an `unwrap()`
         let function = self.module.get_function(&function_name).unwrap();
@@ -415,7 +415,7 @@ pub struct Kernel<'a> {
     //builder: opencl3::kernel::ExecuteKernel<'a>,
     //queue: &'a opencl3::command_queue::CommandQueue,
     global_work_size: usize,
-    local_work_size: Option<usize>,
+    local_work_size: usize,
     stream: &'a rustacuda::stream::Stream,
     //args: Vec<rustacuda::memory::DevicePointer>,
     args: Vec<*mut c_void>,
@@ -429,11 +429,10 @@ impl<'a> Kernel<'a> {
 
     pub fn run(self) -> GPUResult<()> {
         unsafe {
-            // TODO vmx 2021-04-14: Don't unwrap()
             self.stream.launch(
                 &self.function,
                 self.global_work_size as u32,
-                self.local_work_size.unwrap() as u32,
+                self.local_work_size as u32,
                 0,
                 &self.args,
             )?;
