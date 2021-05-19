@@ -47,14 +47,12 @@ impl fmt::Display for Brand {
     }
 }
 
-pub struct Buffer<T> {
+pub struct Buffer {
     buffer: opencl3::memory::Buffer<u8>,
     length: usize,
-    _phantom: std::marker::PhantomData<T>,
 }
 
-impl<T> Buffer<T> {
-    /// The number of bytes / size_of(T)
+impl Buffer {
     pub fn length(&self) -> usize {
         self.length
     }
@@ -254,34 +252,29 @@ impl Program {
             )),
         }
     }
-    pub fn create_buffer<T>(&self, length: usize) -> GPUResult<Buffer<T>> {
+    pub fn create_buffer(&self, length: usize) -> GPUResult<Buffer> {
         assert!(length > 0);
         let buff = opencl3::memory::Buffer::create(
             &self.context,
             opencl3::memory::CL_MEM_READ_WRITE,
-            // TODO vmx 2021-03-15: multiplying with the memsize of the type seems to be wrong.
-            // The `opencl3::memory::Buffer::create()` takes the number of elements and does
-            // internally multiply with the memsize of the given test. Though `ocl` seems to do
-            // the same thing, doing this multiplication makes the tests pass.
-            length * std::mem::size_of::<T>(),
+            length,
             ptr::null_mut(),
         )?;
         self.queue
             .enqueue_write_buffer(&buff, opencl3::types::CL_BLOCKING, 0, &[0u8], &[])?;
 
-        Ok(Buffer::<T> {
+        Ok(Buffer {
             buffer: buff,
             length,
-            _phantom: std::marker::PhantomData,
         })
     }
 
-    pub fn create_buffer_flexible<T>(&self, max_length: usize) -> GPUResult<Buffer<T>> {
+    pub fn create_buffer_flexible(&self, max_length: usize) -> GPUResult<Buffer> {
         let mut curr = max_length;
         let mut step = max_length / 2;
         let mut n = 1;
         while step > 0 && n < max_length {
-            if self.create_buffer::<T>(curr).is_ok() {
+            if self.create_buffer(curr).is_ok() {
                 n = curr;
                 curr = std::cmp::min(curr + step, max_length);
             } else {
@@ -289,7 +282,7 @@ impl Program {
             }
             step /= 2;
         }
-        self.create_buffer::<T>(n)
+        self.create_buffer(n)
     }
     pub fn create_kernel(&self, name: &str, gws: usize, lws: usize) -> GPUResult<Kernel> {
         let kernel = self
@@ -305,30 +298,18 @@ impl Program {
         })
     }
 
-    pub fn write_from_buffer<T>(
-        &self,
-        buffer: &Buffer<T>,
-        offset: usize,
-        data: &[T],
-    ) -> GPUResult<()> {
+    pub fn write_from_buffer(&self, buffer: &Buffer, offset: usize, data: &[u8]) -> GPUResult<()> {
         assert!(offset + data.len() <= buffer.length());
 
         let buffer_create_info = cl_buffer_region {
-            origin: offset * std::mem::size_of::<T>(),
-            size: data.len() * std::mem::size_of::<T>(),
+            origin: offset,
+            size: data.len(),
         };
         let buff = buffer.buffer.create_sub_buffer(
             CL_MEM_READ_WRITE,
             CL_BUFFER_CREATE_TYPE_REGION,
             &buffer_create_info as *const _ as *const c_void,
         )?;
-
-        let data = unsafe {
-            std::slice::from_raw_parts(
-                data.as_ptr() as *const T as *const u8,
-                data.len() * std::mem::size_of::<T>(),
-            )
-        };
 
         self.queue
             .enqueue_write_buffer(&buff, opencl3::types::CL_BLOCKING, 0, &data, &[])?;
@@ -336,16 +317,16 @@ impl Program {
         Ok(())
     }
 
-    pub fn read_into_buffer<T>(
+    pub fn read_into_buffer(
         &self,
-        buffer: &Buffer<T>,
+        buffer: &Buffer,
         offset: usize,
-        data: &mut [T],
+        data: &mut [u8],
     ) -> GPUResult<()> {
         assert!(offset + data.len() <= buffer.length());
         let buffer_create_info = cl_buffer_region {
-            origin: offset * std::mem::size_of::<T>(),
-            size: data.len() * std::mem::size_of::<T>(),
+            origin: offset,
+            size: data.len(),
         };
         let buff = buffer.buffer.create_sub_buffer(
             CL_MEM_READ_WRITE,
@@ -353,14 +334,8 @@ impl Program {
             &buffer_create_info as *const _ as *const c_void,
         )?;
 
-        let mut data = unsafe {
-            std::slice::from_raw_parts_mut(
-                data.as_mut_ptr() as *mut T as *mut u8,
-                data.len() * std::mem::size_of::<T>(),
-            )
-        };
         self.queue
-            .enqueue_read_buffer(&buff, opencl3::types::CL_BLOCKING, 0, &mut data, &[])?;
+            .enqueue_read_buffer(&buff, opencl3::types::CL_BLOCKING, 0, data, &[])?;
 
         Ok(())
     }
@@ -382,7 +357,7 @@ pub trait KernelArgument<'a> {
     fn push(&self, kernel: &mut Kernel<'a>);
 }
 
-impl<'a, T> KernelArgument<'a> for Buffer<T> {
+impl<'a> KernelArgument<'a> for Buffer {
     fn push(&self, kernel: &mut Kernel<'a>) {
         kernel.builder.set_arg(&self.buffer);
     }
