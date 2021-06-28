@@ -1,22 +1,37 @@
-use std::fmt::Write;
+use std::convert::TryInto;
 
 use lazy_static::lazy_static;
 use log::{debug, warn};
 use opencl3::device::DeviceInfo::CL_DEVICE_GLOBAL_MEM_SIZE;
 use sha2::{Digest, Sha256};
 
-use super::{Brand, Device, GPUError, GPUResult};
+use super::{Brand, Device, DeviceUuid, GPUError, GPUResult, PciId, CL_UUID_SIZE_KHR};
 
 const AMD_DEVICE_VENDOR_STRING: &str = "AMD";
 const NVIDIA_DEVICE_VENDOR_STRING: &str = "NVIDIA Corporation";
 
-fn get_bus_id(d: &opencl3::device::Device) -> Result<u32, GPUError> {
-    let vendor = d.vendor()?;
-    match vendor.as_str() {
-        AMD_DEVICE_VENDOR_STRING => d.pci_bus_id_amd().map_err(Into::into),
-        NVIDIA_DEVICE_VENDOR_STRING => d.pci_bus_id_nv().map_err(Into::into),
-        _ => Err(GPUError::DeviceBusId(vendor)),
-    }
+fn get_pci_id(device: &opencl3::device::Device) -> GPUResult<PciId> {
+    let vendor = device.vendor()?;
+    let id = match vendor.as_ref() {
+        AMD_DEVICE_VENDOR_STRING => {
+            let topo = device.topology_amd()?;
+            let device = topo.device as u32;
+            let bus = topo.bus as u32;
+            let function = topo.function as u32;
+            (device << 16) | (bus << 8) | function
+        }
+        NVIDIA_DEVICE_VENDOR_STRING => device.pci_slot_id_nv()?,
+        _ => return Err(GPUError::DevicePciId(vendor)),
+    };
+    Ok(id.into())
+}
+
+fn get_uuid(device: &opencl3::device::Device) -> GPUResult<DeviceUuid> {
+    let uuid: [u8; CL_UUID_SIZE_KHR] = device
+        .uuid_khr()?
+        .try_into()
+        .expect("opencl3 returned an invalid UUID");
+    Ok(uuid.into())
 }
 
 pub fn cache_path(device: &Device, cl_source: &str) -> std::io::Result<std::path::PathBuf> {
@@ -25,23 +40,14 @@ pub fn cache_path(device: &Device, cl_source: &str) -> std::io::Result<std::path
         std::fs::create_dir(&path)?;
     }
     let mut hasher = Sha256::new();
-    // If there are multiple devices with the same name and neither has a Bus-Id,
-    // then there will be a collision. Bus-Id can be missing in the case of an Apple
-    // GPU. For now, we assume that in the unlikely event of a collision, the same
-    // cache can be used.
-    // TODO: We might be able to get around this issue by using cl_vendor_id instead of Bus-Id.
     hasher.input(device.name.as_bytes());
-    if let Some(bus_id) = device.bus_id {
-        hasher.input(bus_id.to_be_bytes());
-    }
+    hasher.input(u32::from(device.pci_id).to_be_bytes());
+    hasher.input(<[u8; CL_UUID_SIZE_KHR]>::from(
+        device.uuid.unwrap_or_default(),
+    ));
     hasher.input(cl_source.as_bytes());
-    let mut digest = String::new();
-    for &byte in hasher.result()[..].iter() {
-        write!(&mut digest, "{:x}", byte).unwrap();
-    }
-    write!(&mut digest, ".bin").unwrap();
-
-    Ok(path.join(digest))
+    let filename = format!("{}.bin", hex::encode(hasher.result()));
+    Ok(path.join(filename))
 }
 
 fn get_memory(d: &opencl3::device::Device) -> GPUResult<u64> {
@@ -91,7 +97,8 @@ fn build_device_list() -> Vec<Device> {
                                 brand,
                                 name: d.name()?,
                                 memory: get_memory(&d)?,
-                                bus_id: get_bus_id(&d).ok(),
+                                pci_id: get_pci_id(&d)?,
+                                uuid: get_uuid(&d).ok(),
                                 device: d,
                             })
                         })
