@@ -1,11 +1,12 @@
 use std::convert::TryInto;
 
-use lazy_static::lazy_static;
 use log::{debug, warn};
 use opencl3::device::DeviceInfo::CL_DEVICE_GLOBAL_MEM_SIZE;
 use sha2::{Digest, Sha256};
 
-use super::{Brand, Device, DeviceUuid, GPUError, GPUResult, PciId, CL_UUID_SIZE_KHR};
+use crate::device::{Brand, DeviceUuid, PciId};
+use crate::error::{GPUError, GPUResult};
+use crate::opencl::{Device, CL_UUID_SIZE_KHR};
 
 const AMD_DEVICE_VENDOR_STRING: &str = "AMD";
 const NVIDIA_DEVICE_VENDOR_STRING: &str = "NVIDIA Corporation";
@@ -55,11 +56,7 @@ fn get_memory(d: &opencl3::device::Device) -> GPUResult<u64> {
         .map_err(|_| GPUError::DeviceInfoNotAvailable(CL_DEVICE_GLOBAL_MEM_SIZE))
 }
 
-lazy_static! {
-    pub(crate) static ref DEVICES: Vec<Device> = build_device_list();
-}
-
-fn build_device_list() -> Vec<Device> {
+pub(crate) fn build_device_list() -> Vec<Device> {
     let mut all_devices = Vec::new();
     let platforms: Vec<_> = opencl3::platform::get_platforms().unwrap_or_default();
 
