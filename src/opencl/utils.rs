@@ -60,54 +60,55 @@ pub(crate) fn build_device_list() -> Vec<Device> {
     let mut all_devices = Vec::new();
     let platforms: Vec<_> = opencl3::platform::get_platforms().unwrap_or_default();
 
+    // Count the devices, in case getting a PCI-ID, use that counter as identifier.
+    let mut devices_counter: u32 = 0;
+    // TODO vmx 2021-07-01: Dirty hack to get things working. `Brand` should be replaced by
+    // `Vendor`.
+    let brand = Brand::Nvidia;
     for platform in platforms.iter() {
-        let platform_name = match platform.name() {
-            Ok(pn) => pn,
-            Err(error) => {
-                warn!("Cannot get platform name: {:?}", error);
-                continue;
-            }
-        };
-        if let Some(brand) = Brand::by_name(&platform_name) {
-            let devices = platform
-                .get_devices(opencl3::device::CL_DEVICE_TYPE_GPU)
-                .map_err(Into::into)
-                .and_then(|devices| {
-                    devices
-                        .into_iter()
-                        .map(opencl3::device::Device::new)
-                        .filter(|d| {
-                            if let Ok(vendor) = d.vendor() {
-                                match vendor.as_str() {
-                                    // Only use devices from the accepted vendors ...
-                                    AMD_DEVICE_VENDOR_STRING | NVIDIA_DEVICE_VENDOR_STRING => {
-                                        // ... which are available.
-                                        return d.available().unwrap_or(0) != 0;
-                                    }
-                                    _ => (),
+        dbg!(platform.name());
+        let devices = platform
+            .get_devices(opencl3::device::CL_DEVICE_TYPE_GPU)
+            .map_err(Into::into)
+            .and_then(|devices| {
+                devices
+                    .into_iter()
+                    .map(opencl3::device::Device::new)
+                    .filter(|d| {
+                        if let Ok(vendor) = d.vendor() {
+                            match vendor.as_str() {
+                                // Only use devices from the accepted vendors ...
+                                AMD_DEVICE_VENDOR_STRING | NVIDIA_DEVICE_VENDOR_STRING => {
+                                    // ... which are available.
+                                    return d.available().unwrap_or(0) != 0;
                                 }
+                                _ => (),
                             }
-                            false
+                        }
+                        false
+                    })
+                    .map(|d| -> GPUResult<_> {
+                        dbg!(&d);
+                        let pci_id =
+                            get_pci_id(&d).unwrap_or_else(|_| PciId::from(devices_counter));
+                        devices_counter += 1;
+                        Ok(Device {
+                            brand,
+                            name: d.name()?,
+                            memory: get_memory(&d)?,
+                            pci_id,
+                            uuid: get_uuid(&d).ok(),
+                            device: d,
                         })
-                        .map(|d| -> GPUResult<_> {
-                            Ok(Device {
-                                brand,
-                                name: d.name()?,
-                                memory: get_memory(&d)?,
-                                pci_id: get_pci_id(&d)?,
-                                uuid: get_uuid(&d).ok(),
-                                device: d,
-                            })
-                        })
-                        .collect::<GPUResult<Vec<_>>>()
-                });
-            match devices {
-                Ok(mut devices) => {
-                    all_devices.append(&mut devices);
-                }
-                Err(err) => {
-                    warn!("Unable to retrieve devices for {:?}: {:?}", brand, err);
-                }
+                    })
+                    .collect::<GPUResult<Vec<_>>>()
+            });
+        match devices {
+            Ok(mut devices) => {
+                all_devices.append(&mut devices);
+            }
+            Err(err) => {
+                warn!("Unable to retrieve devices for {:?}: {:?}", brand, err);
             }
         }
     }
