@@ -59,8 +59,7 @@ pub(crate) fn build_device_list() -> (Vec<Device>, CudaContexts) {
                 let vendor = Vendor::Nvidia;
                 let name = device.name()?;
                 let memory = get_memory(&device)?;
-                // TODO vmx 2021-07-07: Add UUID support
-                let uuid = None;
+                let uuid = device.uuid().ok().map(Into::into);
                 let context = owned_context.get_unowned();
 
                 contexts.push(owned_context);

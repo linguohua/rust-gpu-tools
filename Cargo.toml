@@ -24,3 +24,6 @@ hex = "0.4.3"
 
 opencl3 = { version = "0.2.4", optional = true }
 rustacuda = { version = "0.1", optional = true }
+
+[patch.crates-io]
+rustacuda = { git = "https://github.com/vmx/RustaCUDA", branch = "uuid" }
