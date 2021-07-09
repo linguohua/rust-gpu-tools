@@ -6,7 +6,6 @@ use log::debug;
 use log::warn;
 
 use std::convert::TryFrom;
-use std::hash::{Hash, Hasher};
 use std::mem;
 
 use crate::error::{GPUError, GPUResult};
@@ -199,7 +198,7 @@ pub enum Framework {
     Opencl,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Device {
     vendor: Vendor,
     name: String,
@@ -212,21 +211,6 @@ pub struct Device {
     #[cfg(feature = "cuda")]
     cuda: Option<cuda::Device>,
 }
-
-impl Hash for Device {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.pci_id.hash(state);
-        self.uuid.hash(state);
-    }
-}
-
-impl PartialEq for Device {
-    fn eq(&self, other: &Self) -> bool {
-        self.pci_id == other.pci_id && self.uuid == other.uuid
-    }
-}
-
-impl Eq for Device {}
 
 impl Device {
     pub fn vendor(&self) -> Vendor {
