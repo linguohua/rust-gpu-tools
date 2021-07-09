@@ -16,7 +16,8 @@ use crate::cuda;
 #[cfg(feature = "opencl")]
 use crate::opencl;
 
-pub const CL_UUID_SIZE_KHR: usize = 16;
+/// The UUID of the devices returned by OpenCL as well as CUDA are always 16 bytes long.
+const UUID_SIZE: usize = 16;
 const AMD_DEVICE_VENDOR_STRING: &str = "AMD";
 const NVIDIA_DEVICE_VENDOR_STRING: &str = "NVIDIA Corporation";
 
@@ -85,15 +86,15 @@ impl fmt::Display for PciId {
 
 /// A unique identifier based on UUID of the device.
 #[derive(Copy, Clone, Default, Eq, Hash, PartialEq)]
-pub struct DeviceUuid([u8; CL_UUID_SIZE_KHR]);
+pub struct DeviceUuid([u8; UUID_SIZE]);
 
-impl From<[u8; CL_UUID_SIZE_KHR]> for DeviceUuid {
-    fn from(uuid: [u8; CL_UUID_SIZE_KHR]) -> Self {
+impl From<[u8; UUID_SIZE]> for DeviceUuid {
+    fn from(uuid: [u8; UUID_SIZE]) -> Self {
         Self(uuid)
     }
 }
 
-impl From<DeviceUuid> for [u8; CL_UUID_SIZE_KHR] {
+impl From<DeviceUuid> for [u8; UUID_SIZE] {
     fn from(uuid: DeviceUuid) -> Self {
         uuid.0
     }
@@ -105,7 +106,7 @@ impl TryFrom<&str> for DeviceUuid {
     type Error = GPUError;
 
     fn try_from(uuid: &str) -> GPUResult<Self> {
-        let mut bytes = [0; CL_UUID_SIZE_KHR];
+        let mut bytes = [0; UUID_SIZE];
         hex::decode_to_slice(uuid.replace("-", ""), &mut bytes)
             .map_err(|_| {
                 GPUError::InvalidId(format!("Cannot parse UUID, expected hex-encoded string formated as aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee, got {0}.", uuid))
