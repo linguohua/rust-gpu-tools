@@ -10,7 +10,7 @@ repository = "https://github.com/filecoin-project/rust-gpu-tools"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [features]
-default = ["opencl"]
+default = ["opencl", "cuda"]
 opencl = ["opencl3"]
 cuda = ["rustacuda"]
 

@@ -98,14 +98,14 @@ jobs:
       - run: echo 'export PATH="$HOME:~/.cargo/bin:$PATH"' >> $BASH_ENV
       - run: source $BASH_ENV
       - run:
-          name: Run cargo clippy (default features (opencl))
+          name: Run cargo clippy (features (cuda + opencl))
           command: cargo clippy --workspace --all-targets -- -D warnings
       - run:
           name: Run cargo clippy (cuda)
           command: cargo clippy --workspace --all-targets --no-default-features --features cuda -- -D warnings
       - run:
-          name: Run cargo clippy (cuda + opencl)
-          command: cargo clippy --workspace --all-targets --no-default-features --features cuda,opencl -- -D warnings
+          name: Run cargo clippy (opencl)
+          command: cargo clippy --workspace --all-targets --no-default-features --features opencl -- -D warnings
 
 workflows:
   version: 2.1
