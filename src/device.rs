@@ -39,7 +39,7 @@ lazy_static! {
 ///
 /// It is the first two identifiers of e.g. `lcpci`:
 ///
-/// ```ignore
+/// ```text
 ///     4e:00.0 VGA compatible controller
 ///     || └└-- Device ID
 ///     └└-- Bus ID
@@ -140,7 +140,9 @@ impl fmt::Debug for DeviceUuid {
 /// Unique identifier that can either be a PCI ID or a UUID.
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub enum UniqueId {
+    /// ID based on the PCI bus.
     PciId(PciId),
+    /// ID based on a globally unique identifier.
     Uuid(DeviceUuid),
 }
 
@@ -165,9 +167,12 @@ impl fmt::Display for UniqueId {
     }
 }
 
+/// Currently supported vendors of this library.
 #[derive(Debug, Clone, Copy, Eq, Hash, PartialEq)]
 pub enum Vendor {
+    /// GPU by AMD.
     Amd,
+    /// GPU by NVIDIA.
     Nvidia,
 }
 
@@ -193,12 +198,16 @@ impl fmt::Display for Vendor {
     }
 }
 
+/// Which framework to use, CUDA or OpenCL.
 #[derive(Debug, Clone, Copy, Eq, Hash, PartialEq)]
 pub enum Framework {
+    /// CUDA.
     Cuda,
+    /// OpenCL.
     Opencl,
 }
 
+/// A device that may have a CUDA and/or OpenCL GPU associated with it.
 #[derive(Debug, Clone)]
 pub struct Device {
     vendor: Vendor,
@@ -229,14 +238,17 @@ impl PartialEq for Device {
 impl Eq for Device {}
 
 impl Device {
+    /// Returns the [`Vendor`] of the GPU.
     pub fn vendor(&self) -> Vendor {
         self.vendor
     }
 
+    /// Returns the name of the GPU, e.g. "GeForce RTX 3090".
     pub fn name(&self) -> String {
         self.name.clone()
     }
 
+    /// Returns the memory of the GPU in bytes.
     pub fn memory(&self) -> u64 {
         self.memory
     }
@@ -284,7 +296,7 @@ impl Device {
         self.cuda.as_ref()
     }
 
-    /// Returns all available GPU devices of supported brands.
+    /// Returns all available GPUs that are supported.
     pub fn all() -> Vec<&'static Device> {
         Self::all_iter().collect()
     }
@@ -304,11 +316,20 @@ impl Device {
         Self::all_iter().find(|d| unique_id == d.unique_id())
     }
 
+    /// Returns an iterator of all available GPUs that are supported.
     fn all_iter() -> impl Iterator<Item = &'static Device> {
         DEVICES.0.iter()
     }
 }
 
+/// Get a list of all available and supported devices.
+///
+/// If both, the `cuda` and the `opencl` feature are enabled, a device supporting both will be
+/// combined into a single device. You can then access the underlying CUDA and OpenCL device
+/// if needed.
+///
+/// If there is a failure retrieving a device, it won't lead to a hard error, but an error will be
+/// logged and the corresponding device won't be available.
 #[cfg(feature = "cuda")]
 fn build_device_list() -> (Vec<Device>, cuda::utils::CudaContexts) {
     let mut all_devices = Vec::new();
@@ -375,6 +396,10 @@ fn build_device_list() -> (Vec<Device>, cuda::utils::CudaContexts) {
     (all_devices, cuda_contexts)
 }
 
+/// Get a list of all available and supported OpenCL devices.
+///
+/// If there is a failure retrieving a device, it won't lead to a hard error, but an error will be
+/// logged and the corresponding device won't be available.
 #[cfg(all(feature = "opencl", not(feature = "cuda")))]
 fn build_device_list() -> (Vec<Device>, ()) {
     let devices = opencl::utils::build_device_list()

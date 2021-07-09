@@ -1,3 +1,5 @@
+//! The OpenCL specific implementation of a [`Buffer`], [`Device`], [`Program`] and [`Kernel`].
+
 pub(crate) mod utils;
 
 use std::collections::HashMap;
@@ -15,14 +17,18 @@ use opencl3::types::CL_BLOCKING;
 use crate::device::{DeviceUuid, PciId, Vendor};
 use crate::error::{GPUError, GPUResult};
 
+/// The lowest level identifier of an OpenCL device, it changes whenever a device is initialized.
 #[allow(non_camel_case_types)]
 pub type cl_device_id = opencl3::types::cl_device_id;
 
+/// A Buffer to be used for sending and receiving data to/from the GPU.
 pub struct Buffer<T> {
     buffer: opencl3::memory::Buffer<T>,
+    /// The number of T-sized elements.
     length: usize,
 }
 
+/// OpenCL specific device.
 #[derive(Debug, Clone)]
 pub struct Device {
     vendor: Vendor,
@@ -49,30 +55,46 @@ impl PartialEq for Device {
 impl Eq for Device {}
 
 impl Device {
+    /// Returns the [`Vendor`] of the GPU.
     pub fn vendor(&self) -> Vendor {
         self.vendor
     }
 
+    /// Returns the name of the GPU, e.g. "GeForce RTX 3090".
     pub fn name(&self) -> String {
         self.name.clone()
     }
+
+    /// Returns the memory of the GPU in bytes.
     pub fn memory(&self) -> u64 {
         self.memory
     }
 
+    /// Returns the PCI-ID of the GPU, see the [`PciId`] type for more information.
     pub fn pci_id(&self) -> PciId {
         self.pci_id
     }
 
+    /// Returns the PCI-ID of the GPU if available, see the [`DeviceUuid`] type for more
+    /// information.
     pub fn uuid(&self) -> Option<DeviceUuid> {
         self.uuid
     }
 
+    /// Low-level access to the device identifier.
+    ///
+    /// It changes when the device is initialized and should only be used to interact with other
+    /// libraries that work on the lowest OpenCL level.
     pub fn cl_device_id(&self) -> cl_device_id {
         self.device.id()
     }
 }
 
+/// Abstraction that contains everything to run an OpenCL kernel on a GPU.
+///
+/// The majority of methods are the same as [`crate::cuda::Program`], so you can write code using this
+/// API, which will then work with OpenCL as well as CUDA kernels.
+#[allow(broken_intra_doc_links)]
 pub struct Program {
     device_name: String,
     queue: CommandQueue,
@@ -81,10 +103,12 @@ pub struct Program {
 }
 
 impl Program {
+    /// Returns the name of the GPU, e.g. "GeForce RTX 3090".
     pub fn device_name(&self) -> &str {
         &self.device_name
     }
 
+    /// Creates a program for a specific device from OpenCL source code.
     pub fn from_opencl(device: &Device, src: &str) -> GPUResult<Program> {
         let cached = utils::cache_path(device, src)?;
         if std::path::Path::exists(&cached) {
@@ -120,6 +144,7 @@ impl Program {
         }
     }
 
+    /// Creates a program for a specific device from a compiled OpenCL binary.
     pub fn from_binary(device: &Device, bin: Vec<u8>) -> GPUResult<Program> {
         let context = Context::from_device(&device.device)?;
         let bins = vec![&bin[..]];
@@ -146,6 +171,9 @@ impl Program {
         })
     }
 
+    /// Creates a new buffer that can be used for input/output with the GPU.
+    ///
+    /// The `length` is the number of elements to create.
     pub fn create_buffer<T>(&self, length: usize) -> GPUResult<Buffer<T>> {
         assert!(length > 0);
         let buff = opencl3::memory::Buffer::create(
@@ -186,6 +214,9 @@ impl Program {
         })
     }
 
+    /// Puts data from an existing buffer onto the GPU.
+    ///
+    /// The `offset` is in number of `T` sized elements, not in their byte size.
     pub fn write_from_buffer<T>(
         &self,
         buffer: &Buffer<T>,
@@ -204,6 +235,9 @@ impl Program {
         Ok(())
     }
 
+    /// Reads data from the GPU into an existing buffer.
+    ///
+    /// The `offset` is in number of `T` sized elements, not in their byte size.
     pub fn read_into_buffer<T>(
         &self,
         buffer: &Buffer<T>,
@@ -234,7 +268,13 @@ impl Program {
     }
 }
 
+/// Abstraction for kernel arguments.
+///
+/// The kernel doesn't support being called with custom types, hence some conversion might be
+/// needed. This trait enables automatic coversions, so that any type implementing it can be
+/// passed into a [`Kernel`].
 pub trait KernelArgument<'a> {
+    /// Apply the kernel argument to the kernel.
     fn push(&self, kernel: &mut Kernel<'a>);
 }
 
@@ -256,11 +296,14 @@ impl KernelArgument<'_> for u32 {
     }
 }
 
+/// A local buffer.
 pub struct LocalBuffer<T> {
+    /// The number of T sized elements.
     length: usize,
     _phantom: std::marker::PhantomData<T>,
 }
 impl<T> LocalBuffer<T> {
+    /// Returns a new buffer of the specified `length`.
     pub fn new(length: usize) -> Self {
         LocalBuffer::<T> {
             length,
@@ -277,6 +320,7 @@ impl<T> KernelArgument<'_> for LocalBuffer<T> {
     }
 }
 
+/// A kernel that can be executed.
 #[derive(Debug)]
 pub struct Kernel<'a> {
     builder: ExecuteKernel<'a>,
@@ -284,10 +328,14 @@ pub struct Kernel<'a> {
 }
 
 impl<'a> Kernel<'a> {
+    /// Add an argument to the kernel. All arguments are positional, so you need to make sure you
+    /// call them in the expected order.
     pub fn arg<T: KernelArgument<'a>>(mut self, t: &T) -> Self {
         t.push(&mut self);
         self
     }
+
+    /// Actually run the kernel.
     pub fn run(mut self) -> GPUResult<()> {
         self.builder.enqueue_nd_range(&self.queue)?;
         Ok(())

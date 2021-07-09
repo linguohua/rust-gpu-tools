@@ -8,6 +8,8 @@
 //!
 //! [feature flags]: https://doc.rust-lang.org/cargo/reference/manifest.html#the-features-section
 
+#![warn(missing_docs)]
+
 mod device;
 mod error;
 #[cfg(all(feature = "cuda", feature = "opencl"))]

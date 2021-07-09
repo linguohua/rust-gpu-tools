@@ -101,6 +101,23 @@ jobs:
           name: Run cargo clippy (opencl)
           command: cargo clippy --workspace --all-targets --no-default-features --features opencl -- -D warnings
 
+  rustdoc:
+    executor: default
+    steps:
+      - *restore-workspace
+      - *restore-cache
+      - run: echo 'export PATH="$HOME:~/.cargo/bin:$PATH"' >> $BASH_ENV
+      - run: source $BASH_ENV
+      - run:
+          name: Run cargo rustdoc (default features (cuda + opencl))
+          command: cargo rustdoc --all-targets -- -D warnings
+      - run:
+          name: Run cargo rustdoc (cuda)
+          command: cargo rustdoc --all-targets --no-default-features --features cuda -- -D warnings
+      - run:
+          name: Run cargo rustdoc (opencl)
+          command: cargo rustdoc --all-targets --no-default-features --features opencl -- -D warnings
+
 workflows:
   version: 2.1
 
@@ -111,6 +128,9 @@ workflows:
           requires:
             - cargo_fetch
       - clippy:
+          requires:
+            - cargo_fetch
+      - rustdoc:
           requires:
             - cargo_fetch
       # TODO vmx 2021-07-09: Install CUDA properly on CI

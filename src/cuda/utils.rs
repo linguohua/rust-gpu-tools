@@ -14,6 +14,15 @@ use crate::error::{GPUError, GPUResult};
 pub(crate) struct CudaContexts(Vec<rustacuda::context::Context>);
 unsafe impl Sync for CudaContexts {}
 
+/// The PCI-ID is the combination of the PCI Bus ID and PCI Device ID.
+///
+/// It is the first two identifiers of e.g. `lspci`:
+///
+/// ```ignore
+///     4e:00.0 VGA compatible controller
+///     || └└-- Device ID
+///     └└-- Bus ID
+/// ```
 fn get_pci_id(device: &rustacuda::device::Device) -> Result<PciId, GPUError> {
     let bus_id = device.get_attribute(rustacuda::device::DeviceAttribute::PciBusId)? as u16;
     let device_id = device.get_attribute(rustacuda::device::DeviceAttribute::PciDeviceId)? as u16;
@@ -26,7 +35,7 @@ fn get_memory(d: &rustacuda::device::Device) -> GPUResult<u64> {
     Ok(u64::try_from(memory).expect("Platform must be <= 64-bit"))
 }
 
-/// Get a lost of all devices.
+/// Get a list of all available and supported devices.
 ///
 /// If there is a failure initializing CUDA or retrieving a device, it won't lead to a hard error,
 /// but an error will be logged and the corresponding device won't be available.

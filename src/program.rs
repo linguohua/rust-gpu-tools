@@ -2,13 +2,16 @@ use crate::cuda;
 use crate::error::GPUError;
 use crate::opencl;
 
+/// Abstraction for running programs on CUDA or OpenCL.
 pub enum Program {
+    /// OpenCL program.
     Opencl(opencl::Program),
+    /// CUDA program.
     Cuda(cuda::Program),
 }
 
 impl Program {
-    /// Run some code in the context of the program
+    /// Run some code in the context of the program.
     ///
     /// There is an implementation for OpenCL and for CUDA. Both use different Rust types, but
     /// [`opencl::Program`] and [`cuda::Program`] implement the same API. This means that same
@@ -31,6 +34,7 @@ impl Program {
         }
     }
 
+    /// Returns the name of the GPU, e.g. "GeForce RTX 3090".
     pub fn device_name(&self) -> &str {
         match self {
             Self::Opencl(program) => program.device_name(),
