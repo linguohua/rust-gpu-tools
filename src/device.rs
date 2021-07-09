@@ -164,7 +164,7 @@ impl fmt::Display for UniqueId {
     }
 }
 
-#[derive(Debug, Clone, Copy, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum Vendor {
     Amd,
     Nvidia,
@@ -192,7 +192,7 @@ impl fmt::Display for Vendor {
     }
 }
 
-#[derive(Debug, Clone, Copy, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum Framework {
     Cuda,
     Opencl,
