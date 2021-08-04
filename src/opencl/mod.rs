@@ -42,7 +42,7 @@ impl<T> Buffer<T> {
         self.buffer.len() / std::mem::size_of::<T>()
     }
 
-    pub fn write_from(&mut self, offset: usize, data: &[T]) -> GPUResult<()> {
+    pub fn write_from(&self, offset: usize, data: &[T]) -> GPUResult<()> {
         assert!(offset + data.len() <= self.length());
         self.buffer
             .create_sub_buffer(
